@@ -1,5 +1,9 @@
 package com.example.android.sunshine.app.converter;
 
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.preference.PreferenceManager;
+
 import com.example.android.sunshine.app.data.ForecastData;
 
 import org.json.JSONArray;
@@ -13,7 +17,7 @@ import java.util.ArrayList;
  */
 public class ForecastDataConverter {
 
-    public static String[] getWeatherForecastFromJson(String jsonString){
+    public static String[] getWeatherForecastFromJson(String jsonString,boolean isImperial){
         ArrayList<String> forecastList = new ArrayList<String>();
         ForecastData dayForecast = null;
         try {
@@ -23,7 +27,7 @@ public class ForecastDataConverter {
             for(int i=0; i < list.length();i++){
                 JSONObject forecast = (JSONObject) list.get(i);
                 dayForecast = ForecastData.getDayForecast(forecast);
-                forecastList.add(dayForecast.formattedForecastInfo());
+                forecastList.add(dayForecast.formattedForecastInfo(isImperial));
             }
         } catch (JSONException jsonException){
             // do nothing...
@@ -31,4 +35,6 @@ public class ForecastDataConverter {
 
         return forecastList.toArray(new String[forecastList.size()]);
     }
+
+
 }

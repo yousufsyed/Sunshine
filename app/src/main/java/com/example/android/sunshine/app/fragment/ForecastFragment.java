@@ -1,9 +1,13 @@
 package com.example.android.sunshine.app.fragment;
 
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
 
 import android.util.Log;
@@ -13,11 +17,15 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import android.widget.Toast;
 
 import com.example.android.sunshine.app.R;
+import com.example.android.sunshine.app.activity.DetailActivity;
 import com.example.android.sunshine.app.converter.ForecastDataConverter;
+import com.example.android.sunshine.app.utils.AppUtils;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -25,6 +33,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -38,6 +47,7 @@ public class ForecastFragment  extends Fragment {
 
     private ArrayAdapter<String> mForecastAdapter;
     private ListView mList;
+
 
     public ForecastFragment() {
     }
@@ -57,6 +67,12 @@ public class ForecastFragment  extends Fragment {
     }
 
     @Override
+    public void onStart(){
+        super.onStart();
+        updateWeatherForecast();
+
+    }
+    @Override
     public void onCreateOptionsMenu(Menu menu, MenuInflater inflater){
         inflater.inflate(R.menu.forecastfragment, menu);
     }
@@ -64,8 +80,7 @@ public class ForecastFragment  extends Fragment {
     @Override
     public boolean onOptionsItemSelected(MenuItem item){
         if(item.getItemId() == R.id.action_refresh){
-            FetchWeatherTask forecastTask = new FetchWeatherTask();
-            forecastTask.execute("94043");
+            updateWeatherForecast();
             return true;
         }
         return super.onOptionsItemSelected(item);
@@ -76,21 +91,28 @@ public class ForecastFragment  extends Fragment {
                              Bundle savedInstanceState) {
         View rootView = inflater.inflate(R.layout.fragment_main, container, false);
 
-        String[] forecast = {
-                "Today - Sunny - 88/63",
-                "Tomorrow - Foggy - 70/46",
-                "Weds - Cloudy - 72/63",
-                "Thurs - Rainy - 64/51",
-                "Fri - Foggy - 70/46",
-                "Sat - Sunny - 76/68",
-                "Sun - Sunny - 82/70",
-        };
+        mForecastAdapter = new ArrayAdapter<String>(getActivity(),
+                                                    R.layout.list_item_forecast,
+                                                    R.id.list_item_forecast_textview,
+                                                    new ArrayList<String>());
 
-        List<String> list = new LinkedList<String>(Arrays.asList(forecast));
-        mForecastAdapter = new ArrayAdapter<String>(getActivity(), R.layout.list_item_forecast, R.id.list_item_forecast_textview, list);
         mList = (ListView) rootView.findViewById(R.id.listview_forecast);
         mList.setAdapter(mForecastAdapter);
+        mList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                AppUtils.launchForecastDetailsActivity(ForecastFragment.this.getActivity(),
+                        mForecastAdapter.getItem(position));
+            }
+        });
         return rootView;
+    }
+
+    // To initiate an Async task to fetch the weather forecast for the current week.
+    private void updateWeatherForecast(){
+        String location = AppUtils.getPreferredLocation(this.getActivity());
+        FetchWeatherTask forecastTask = new FetchWeatherTask();
+        forecastTask.execute(location);
     }
 
     /*
@@ -114,7 +136,6 @@ public class ForecastFragment  extends Fragment {
                 //Building the query String....
                 String urlString = buildQueryString(params[0]);
 
-                Log.v(TAG,urlString);
                 //Making the network call to get the json...
                 URL url = new URL(urlString);
                 urlConnection = (HttpURLConnection) url.openConnection();
@@ -149,22 +170,23 @@ public class ForecastFragment  extends Fragment {
                     }
                 }
             }
-            Log.v(TAG, forecastJsonStr);
-            return ForecastDataConverter.getWeatherForecastFromJson(forecastJsonStr);
+            return ForecastDataConverter.getWeatherForecastFromJson(forecastJsonStr,isPreferredUnitsImperial(getActivity()));
         }
 
         @Override
         protected void onPostExecute(String[] forecastData) {
-            mForecastAdapter.clear();
-            // LESSON Learnt:
-            // Arrays.asList(forecastData) will produce fixed-size list,
-            // hence the list can't be modified structurally (No remove or add operations can be performed).
-            List<String> list = new LinkedList<String>(Arrays.asList(forecastData));
-            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
-                mForecastAdapter.addAll(list);
-            } else {
-                for(String item : forecastData){
-                    mForecastAdapter.add(item);
+            if(forecastData != null) {
+                mForecastAdapter.clear();
+                // LESSON Learnt:
+                // Arrays.asList(forecastData) will produce fixed-size list,
+                // hence the list can't be modified structurally (No remove or add operations can be performed).
+                List<String> list = new LinkedList<String>(Arrays.asList(forecastData));
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
+                    mForecastAdapter.addAll(list);
+                } else {
+                    for (String item : forecastData) {
+                        mForecastAdapter.add(item);
+                    }
                 }
             }
         }
@@ -196,6 +218,19 @@ public class ForecastFragment  extends Fragment {
                 e.printStackTrace();
             }
             return urlString;
+        }
+
+        private boolean isPreferredUnitsImperial(Context ctx) {
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ctx);
+            String units = prefs.getString(ctx.getString(R.string.pref_metrics_key), getString(R.string.pref_metrics_default));
+            if (units.equals(getString(R.string.pref_unit_imperial)))
+                return true;
+            else if (!units.equals(getString(R.string.pref_unit_metric))){
+                Log.e(TAG, "Invalid units" + units);
+                return true;
+            }
+            else
+                return false;
         }
     }
 

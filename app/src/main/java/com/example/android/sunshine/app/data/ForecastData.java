@@ -38,12 +38,16 @@ public class ForecastData {
         return formatter.format(date);
     }
 
-    private String formattedMaxMin(){
-        return Math.round(max) + "/"+ Math.round(min);
+    private String formattedMaxMin(double high, double low, boolean isImperial) {
+        if (isImperial){
+            high = (high * 1.8) + 32;
+            low = (low * 1.8) + 32;
+        }
+        return Math.round(high) + "/"+ Math.round(low);
     }
 
-    public String formattedForecastInfo(){
-        return getReadableDate() + " - " + getDesc() + " - " + formattedMaxMin();
+    public String formattedForecastInfo(boolean isImperial){
+        return getReadableDate() + " - " + getDesc() + " - " + formattedMaxMin(max, min, isImperial);
     }
 
     public static ForecastData getDayForecast(JSONObject jsonObject){
